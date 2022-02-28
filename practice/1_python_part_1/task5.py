@@ -15,4 +15,5 @@ Examples:
 def remove_duplicated_words(line: str) -> str:
     """Returns a new string with duplicate words removed."""
     words = line.split()
-    return ' '.join([word for ind, word in enumerate(words) if ind == words.index(word)])
+    seen = set()
+    return ' '.join([word for word in words if word not in seen and (seen.add(word) or True)])

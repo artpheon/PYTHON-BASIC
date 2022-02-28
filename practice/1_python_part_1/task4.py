@@ -12,7 +12,7 @@ from typing import List
 def calculate_power_with_difference(ints: List[int]) -> List[int]:
     """Returns a list with values being raised to power 2 and calculated differences."""
     power = 2
-    result = list()
+    result = []
     for ind, val in enumerate(ints):
         if ind == 0:
             result.append(val ** power)
