@@ -13,4 +13,7 @@ from typing import Dict
 
 
 def set_to_dict(dict_to_update: Dict[str, int], **items_to_set) -> Dict:
-    ...
+    """Updates dict keys with new values, if bigger than old ones, or such key did not exist."""
+    for key, val in items_to_set.items():
+        dict_to_update[key] = dict_to_update[key] if key in dict_to_update and dict_to_update[key] > val else val
+    return dict_to_update

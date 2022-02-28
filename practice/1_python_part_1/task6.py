@@ -20,5 +20,9 @@ from typing import Tuple
 
 
 def get_min_max(filename: str) -> Tuple[int, int]:
-    ...
-
+    """Reads a file filename and gets the biggest and the smallest integer."""
+    with open(filename, 'r') as f:
+        min_int, max_int = float('+inf'), float('-inf')
+        for num in f.readlines():
+            min_int, max_int = min(int(num), min_int), max(int(num), max_int)
+        return min_int, max_int

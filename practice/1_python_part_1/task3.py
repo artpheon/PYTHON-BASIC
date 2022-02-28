@@ -16,4 +16,11 @@ from typing import Iterable
 
 
 def build_from_unique_words(*lines: Iterable[str], word_number: int) -> str:
-    ...
+    """Builds string from the words at specified index."""
+    # dicts are ordered in python version >= 3.7
+    words = [list(dict.fromkeys(s.split())) for s in lines]
+
+    # another approach, without dicts
+    # words = [s.split() for s in lines]
+    # words = [[w for i, w in enumerate(word) if i == word.index(w)] for word in words]
+    return ' '.join([word[word_number] for word in words if len(word) > word_number])
