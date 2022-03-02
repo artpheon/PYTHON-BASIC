@@ -18,6 +18,17 @@ Examples:
 
 
 def read_numbers(n: int) -> str:
-    ...
-
-
+    """Read integer n times from user input, and return a string displaying the average number."""
+    num = 0
+    count = 0
+    for _ in range(n):
+        try:
+            num = num + int(input())
+        except ValueError:
+            num = num + 0
+        else:
+            count = count + 1
+    try:
+        return f'Avg: {num / count:.2f}'
+    except ZeroDivisionError:
+        return 'No numbers entered'
