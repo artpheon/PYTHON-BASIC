@@ -29,7 +29,6 @@ def division(x: int, y: int) -> typing.Union[None, int]:
             res = x // y
     except ZeroDivisionError:
         print('Division by 0')
-        return None
     except DivisionByOneException as err:
         print(err)
     else:

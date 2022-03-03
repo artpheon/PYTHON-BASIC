@@ -39,8 +39,7 @@ class Homework:
     def is_active(self) -> bool:
         if self.created + self.deadline > datetime.datetime.now():
             return True
-        else:
-            return False
+        return False
 
 
 @dataclass
@@ -51,12 +50,10 @@ class Person:
 
 class Student(Person):
     @staticmethod
-    def do_homework(homework: Homework) -> typing.Union[None, Homework]:
+    def do_homework(homework: Homework) -> typing.Optional[Homework]:
         if homework.is_active():
             return homework
-        else:
-            print('You are late!')
-            return None
+        print('You are late!')
 
 
 class Teacher(Person):
