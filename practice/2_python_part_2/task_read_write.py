@@ -14,15 +14,18 @@ Example:
     result.txt(content: "23, 78, 3")
 """
 
-if __name__ == '__main__':
-    files = 20
-    with open('result.txt', 'w') as result:
-        for i in range(1, files + 1):
-            with open(f'files/file_{i}.txt', 'r') as f:
-                # using readlines() in case we have several lines with numbers. otherwise, would use read()
+
+def read_write_values(fnum=20, fdir='files', result='result.txt'):
+    with open(result, 'w') as result:
+        for i in range(1, fnum + 1):
+            with open(f'{fdir}/file_{i}.txt', 'r') as f:
                 for line in f.readlines():
                     result.write(line.strip())
-                    if i == files:
+                    if i == fnum:
                         result.write('\n')
                     else:
                         result.write(', ')
+
+
+if __name__ == '__main__':
+    read_write_values()

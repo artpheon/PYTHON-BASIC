@@ -14,6 +14,7 @@ In all cases it should print "Division finished"
     1
     Division finished
 """
+import sys
 import typing
 
 
@@ -28,9 +29,11 @@ def division(x: int, y: int) -> typing.Union[None, int]:
         else:
             res = x // y
     except ZeroDivisionError:
-        print('Division by 0')
+        print('Division by 0', file=sys.stderr)
+        raise
     except DivisionByOneException as err:
-        print(err)
+        print(err, file=sys.stderr)
+        raise
     else:
         return res
     finally:
@@ -38,9 +41,14 @@ def division(x: int, y: int) -> typing.Union[None, int]:
 
 
 if __name__ == '__main__':
-    d = division(1, 0)
-    print(d)
-    d = division(1, 1)
-    print(d)
+    d = None
+    try:
+        d = division(1, 0)
+    except ZeroDivisionError:
+        print(d)
+    try:
+        d = division(1, 1)
+    except DivisionByOneException:
+        print(d)
     d = division(2, 2)
     print(d)

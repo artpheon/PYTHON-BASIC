@@ -33,6 +33,8 @@ import typing
 class Homework:
     def __init__(self, text: str, days_to_complete: int) -> None:
         self.text = text
+        if days_to_complete < 0:
+            raise ValueError('days_to_complete cannot be negative')
         self.deadline = datetime.timedelta(days=days_to_complete)
         self.created = datetime.datetime.now()
 

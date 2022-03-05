@@ -24,9 +24,13 @@ def generate_words(n=20):
     return words
 
 
-if __name__ == '__main__':
+def read_write_2(file1='file1.txt', file2='file2.txt'):
     words = generate_words()
-    with open('file1.txt', 'w', encoding='utf_8') as f:
+    with open(file1, 'w', encoding='utf_8') as f:
         f.writelines('\n'.join(words))
-    with open('file2.txt', 'w', encoding='cp1252') as f:
+    with open(file2, 'w', encoding='cp1252') as f:
         f.writelines(','.join(words[::-1]))
+
+
+if __name__ == '__main__':
+    read_write_2()
