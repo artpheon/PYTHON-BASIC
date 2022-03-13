@@ -15,11 +15,51 @@ Example:
 """
 
 import argparse
+import unittest
+from faker import Faker
+from unittest.mock import Mock
 
 
-def print_name_address(args: argparse.Namespace) -> None:
-    ...
+def print_name_address(parser: argparse.Namespace) -> None:
+    fake = Faker()
+    fake_data = []
+    for n in range(parser.num):
+        data = dict()
+        value = None
+        for i in parser.values:
+            arg = i.split('=')
+            try:
+                value = getattr(fake, arg[1])()
+            except AttributeError:
+                # if faker cannot provide a specific method,
+                # we ask to create a short random text
+                value = fake.sentence(nb_words=3)
+            except IndexError:
+                raise SyntaxError(f'argument {arg} has incorrect syntax') from None
+            finally:
+                data[arg[0]] = value
+        fake_data.append(data)
+    for data in fake_data:
+        print(data)
 
+
+class FieldProviderError(Exception):
+    pass
+
+
+class KeyValGenerator:
+    def __init__(self) -> None:
+        self.parser = argparse.ArgumentParser(description='Get key=value pairs')
+        self.parser.add_argument('num', metavar='NUMBER', type=int, default=0)
+        self.parser.add_argument('values', metavar='FIELD=PROVIDER', nargs='+')
+
+    def get_parser(self) -> argparse.Namespace:
+        return self.parser.parse_args()
+
+
+if __name__ == '__main__':
+    g = KeyValGenerator()
+    print_name_address(g.get_parser())
 
 """
 Write test for print_name_address function
@@ -30,3 +70,17 @@ Example:
     >>> m.method()
     123
 """
+
+
+class TestFieldProvider(unittest.TestCase):
+    NUM = str(4)
+    FIELD_1 = 'fake_name'
+    FIELD_2 = 'fake_address'
+    PROVIDER_1 = 'name'
+    PROVIDER_2 = 'address'
+    args = [NUM, f'{FIELD_1}={PROVIDER_1}', f'{FIELD_2}={PROVIDER_2}']
+
+    def test_cli_arguments(self):
+        m = Mock()
+        m.print_name_address(self.args)
+        m.print_name_address.assert_called_with(self.args)
