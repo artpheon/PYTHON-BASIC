@@ -68,5 +68,5 @@ def check_result(xml_path: str):
     print("Success!")
 
 
-if __name__ == '__main__':
-    check_result(xml_path='./example_result.xml')
+def test_xml():
+    check_result(xml_path='../result/out.xml')
