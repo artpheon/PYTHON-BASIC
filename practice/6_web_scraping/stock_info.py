@@ -274,9 +274,10 @@ class StockInfo:
         x.field_names = ['Name', 'Shares', 'Date Reported', '% Out', 'Value']
         holders = self.companies['BLK']['holders']
         for v in holders.values():
-            x.add_row(
-                [v['name'], v['shares'], v['date_reported'], v['percent_out'], v['value']]
-            )
+            x.add_row([
+                    v['name'], v['shares'], v['date_reported'],
+                    v['percent_out'], v['value']
+            ])
         x.align = 'l'
         return x
 
