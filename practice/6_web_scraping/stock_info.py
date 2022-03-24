@@ -32,12 +32,15 @@ Links:
     - lxml docs: https://lxml.de/
 """
 import random
+
+import bs4
 from bs4 import BeautifulSoup as BS
 import requests
 import re
 import logging
 from prettytable import PrettyTable
 import json
+from typing import Dict, Optional, List, Any, Iterable, Tuple
 
 
 class StockInfo:
@@ -47,40 +50,55 @@ class StockInfo:
     COMPANIES_NUM = 0
     BLK = 'BLK'
 
-    def _prepare_session(self):
+    def _prepare_session(self) -> None:
+        """
+        Getting sample user agents from a json file.
+        """
         with open('user_agents.json', 'r') as fp:
             self.headers_list = json.load(fp)
         self._update_session()
 
-    def _update_session(self):
+    def _update_session(self) -> None:
+        """
+        Creating a new requests session and updating a user agent.
+        """
         self.session = requests.Session()
         self.session.headers = random.choice(self.headers_list)
-        logging.info('updating session and user-agent')
+        logging.info('updating session and user-agent.')
 
-    def _set_logging(self):
+    def _set_logging(self) -> None:
+        """
+        Setting up logging if DEBUG variable is True.
+        """
         if self.DEBUG:
             fmt = '%(asctime)s — %(name)s — %(funcName)s:%(lineno)d — %(message)s'
             logging.basicConfig(filename='stock_info.log', filemode='w',
                                 format=fmt,
                                 level=logging.DEBUG)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.companies = dict()
         self._prepare_session()
         self._set_logging()
 
-    def get_soup_from_url(self, url, params=None):
+    def get_soup_from_url(self, url: str, params: Optional[Dict[str, int]] = None) -> bs4.BeautifulSoup:
+        """
+        Takes a URL, gets the page from it, and returns a BS4 instance from the page.
+        """
         page = self.session.get(url, params=params)
         if not page.ok:
             raise requests.exceptions.ConnectionError
-        return BS(page.content, 'html.parser').body
+        return BS(page.content, 'html.parser')
 
     @staticmethod
-    def re_parse_results(string):
+    def re_parse_results(string: str) -> int:
         comp = re.compile(r'.*?of (\d+) results.*?')
         return int(comp.search(string).group(1))
 
-    def gen_listing_soups(self):
+    def gen_listing_soups(self) -> Iterable[bs4.BeautifulSoup]:
+        """
+        Generator of pages, where the companies are listed.
+        """
         count = 100
         n = self.COMPANIES_NUM // count + 1
         for i in range(n):
@@ -91,7 +109,10 @@ class StockInfo:
             )
 
     @staticmethod
-    def parse_info_from_trows(soup):
+    def parse_info_from_trows(soup: bs4.BeautifulSoup) -> Dict[str, Dict[Any, str]]:
+        """
+        Parsing the code and title of a company from the page.
+        """
         table = soup.select('div#scr-res-table>div>table>tbody>tr')
         logging.info(f'Found {len(table)} rows in a table')
         result = dict()
@@ -100,7 +121,10 @@ class StockInfo:
             result[link.text] = dict(title=link['title'])
         return result
 
-    def get_basic_info(self):
+    def get_basic_info(self) -> None:
+        """
+        Fills in a dict with {code name: full title} info about companies.
+        """
         soup = self.get_soup_from_url(self.MOST_ACTIVE)
         res_num = soup.find(
             'span',
@@ -112,8 +136,10 @@ class StockInfo:
         for link in links_generator:
             self.companies.update(self.parse_info_from_trows(link))
 
-    def collect_statistics(self, code):
-        """Collects 52-Week Change, Total Cash"""
+    def collect_statistics(self, code: str) -> None:
+        """
+        Collects 52-Week Change and Total Cash from statistics tab of a company.
+        """
         soup = self.get_soup_from_url(f'{self.BASE_URL}/quote/{code}/key-statistics')
         section = soup.select_one('div#Main').find('section')
         if not section:
@@ -134,8 +160,10 @@ class StockInfo:
             'total_cash': total_cash,
         }
 
-    def collect_profile(self, code):
-        """ Collects Country, Employees, CEO Name, CEO Year Born"""
+    def collect_profile(self, code: str) -> None:
+        """
+        Collects Country, Employees, CEO Name and CEO Year of birth for a company.
+        """
         try:
             soup = self.get_soup_from_url(f'{self.BASE_URL}/quote/{code}/profile')
             section = soup.select_one('div#Main').find('section')
@@ -155,8 +183,10 @@ class StockInfo:
                 'ceo_year': ceo_year,
             }
 
-    def collect_holders(self, code):
-        """Collects Shares, Date Reported, % Out, Value."""
+    def collect_holders(self, code: str) -> None:
+        """
+        Collects Shares, Date Reported, % Out, Value about a company.
+        """
         try:
             soup = self.get_soup_from_url(f'{self.BASE_URL}/quote/{code}/holders')
             section = soup.select_one('div#Main').section
@@ -181,7 +211,10 @@ class StockInfo:
                 i = i + 1
             self.companies[code]['holders'] = holders
 
-    def collect_blk_holders(self):
+    def collect_blk_holders(self) -> None:
+        """
+        Collecting info about top 10 Blackrock Inc holders.
+        """
         try:
             self.collect_holders(self.BLK)
         except requests.exceptions.ConnectionError:
@@ -191,7 +224,10 @@ class StockInfo:
             except requests.exceptions.ConnectionError:
                 logging.warning('Black Rock holdings data have not been collected')
 
-    def _get_full_info(self, code):
+    def _get_full_info(self, code: str) -> None:
+        """
+        Trying to get data for a company by its code, changing user-agent on exception.
+        """
         try:
             self.collect_statistics(code)
             self.collect_profile(code)
@@ -203,7 +239,10 @@ class StockInfo:
             except requests.exceptions.ConnectionError:
                 logging.warning(f'Some data for {code} have not been collected.')
 
-    def get_full_info(self):
+    def get_full_info(self) -> None:
+        """
+        Collecting full info about the companies by their code names.
+        """
         logging.info(f'Scraped {len(self.companies)} results')
         i = 1
         for k in self.companies:
@@ -214,22 +253,24 @@ class StockInfo:
                 print(f'Done: {i / self.COMPANIES_NUM * 100:.1f}%.')
             i += 1
 
-    def close(self):
+    def close(self) -> None:
         self.session.close()
 
-    def save_json(self, name):
+    def save_json(self, name: str) -> None:
         with open(name, 'w') as fp:
             json.dump(obj=self.companies, fp=fp, indent=4, sort_keys=True)
 
-    def find_five_youngest(self):
+    def find_five_youngest(self) -> List[Tuple[str, int]]:
         rows = []
         for k, v in self.companies.items():
             if 'profile' in v and v['profile']['ceo_year']:
                 rows.append((k, v['profile']['ceo_year']))
         return sorted(rows, reverse=True, key=lambda x: x[1])[:5]
 
-    def sheet_youngest_ceo(self):
-        """5 stocks with the youngest CEOs"""
+    def sheet_youngest_ceo(self) -> PrettyTable:
+        """
+        Prepares a sheet about top 5 stocks with the youngest CEOs.
+        """
         x = PrettyTable()
         x.title = '5 stocks with the youngest CEOs'
         x.field_names = ['Name', 'Code', 'Country', 'Employees', 'CEO Name', 'CEO Year']
@@ -245,15 +286,17 @@ class StockInfo:
         x.align = 'l'
         return x
 
-    def find_best_52_week_change(self):
+    def find_best_52_week_change(self) -> List[Tuple[str, float]]:
         best_change = []
         for k, v in self.companies.items():
             if 'statistics' in v and v['statistics']['week_change']:
                 best_change.append((k, v['statistics']['week_change']))
         return sorted(best_change, reverse=True, key=lambda x: x[1])[:10]
 
-    def sheet_best_52_change(self):
-        """10 stocks with the best 52-week change"""
+    def sheet_best_52_change(self) -> PrettyTable:
+        """
+        Prepares a sheet with top 10 stocks with the best 52-week change.
+        """
         x = PrettyTable()
         x.title = '10 stocks with the best 52-week change'
         x.field_names = ['Name', 'Code', '52-Week Change', 'Total Cash']
@@ -267,16 +310,18 @@ class StockInfo:
         x.align = 'l'
         return x
 
-    def sheet_10_holds_blk(self):
-        """10 largest holds of Blackrock Inc"""
+    def sheet_10_holds_blk(self) -> PrettyTable:
+        """
+        Prepares a sheet with top 10 largest holds of Blackrock Inc.
+        """
         x = PrettyTable()
         x.title = '10 largest holds of Blackrock Inc'
         x.field_names = ['Name', 'Shares', 'Date Reported', '% Out', 'Value']
         holders = self.companies['BLK']['holders']
         for v in holders.values():
             x.add_row([
-                    v['name'], v['shares'], v['date_reported'],
-                    v['percent_out'], v['value']
+                v['name'], v['shares'], v['date_reported'],
+                v['percent_out'], v['value']
             ])
         x.align = 'l'
         return x
