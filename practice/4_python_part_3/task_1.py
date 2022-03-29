@@ -24,7 +24,8 @@ def calculate_days(from_date: str) -> int:
     except Exception as exc:
         raise WrongFormatException('Wrong format for data. Tip: YYYY-MM-DD') from exc
     else:
-        return datetime.now().day - calculated.day
+        delta = datetime.now() - calculated
+        return delta.days
 
 
 """
@@ -53,6 +54,21 @@ class TestTime:
     def test_date_same(self, current_date, freezer):
         freezer.move_to('2010-10-10')
         assert calculate_days('2010-10-10') == 0
+
+    @pytest.mark.freeze_time
+    def test_date_years(self, current_date, freezer):
+        freezer.move_to('2010-10-10')
+        assert calculate_days('2020-10-10') == -3653
+
+    @pytest.mark.freeze_time
+    def test_date_months(self, current_date, freezer):
+        freezer.move_to('2020-02-10')
+        assert calculate_days('2020-01-10') == 31
+
+    @pytest.mark.freeze_time
+    def test_date_months_neg(self, current_date, freezer):
+        freezer.move_to('2020-01-01')
+        assert calculate_days('2020-02-01') == -31
 
     def test_date_wrong_format(self, current_date):
         with pytest.raises(WrongFormatException):
