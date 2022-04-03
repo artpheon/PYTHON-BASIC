@@ -1,26 +1,23 @@
 import argparse
 import logging
 import os
+import queue
 import random
 import re
 import sys
 import json
 import time
 import uuid
+import multiprocessing as mp
 from configparser import ConfigParser
-from concurrent.futures import ProcessPoolExecutor
-from typing import Iterable, IO
+from typing import IO, Callable, Dict, Any, Generator, List
 
 CONFIG_NAME = 'default.ini'
 CLI_NAME = 'datagen'
 LOG = logging.getLogger(CLI_NAME)
 
 
-def setup_logger():
-    logging.basicConfig(level=logging.INFO, format='%(name)s: %(levelname)s: %(message)s')
-
-
-def get_config() -> dict:
+def get_config() -> Dict[str, Any]:
     cp = ConfigParser()
     try:
         if not cp.read(CONFIG_NAME):
@@ -43,7 +40,31 @@ def get_config() -> dict:
     sys.exit(1)
 
 
-def get_arguments(defaults: dict) -> argparse.Namespace:
+def validate_arguments(args: argparse.Namespace) -> argparse.Namespace:
+    error = None
+    if not os.path.isdir(args.path):
+        error = f'not a valid path: {args.path}'
+    if args.count < 0:
+        error = f'files count is less than 0'
+    if not args.name:
+        error = f'file name cannot be empty'
+    if error:
+        logging.error(error)
+        sys.exit(1)
+
+    if args.data_lines < 1:
+        LOG.warning('less than 1 line of data was specified, defaults to 1')
+        args.data_lines = 1
+    if args.multiprocessing < 1:
+        LOG.warning('number of processes cannot be < 1, defaults to 1')
+        args.multiprocessing = 1
+    if args.multiprocessing > os.cpu_count():
+        LOG.warning('number of processes exceeds number of cpu, defaults to number of cpu')
+        args.multiprocessing = os.cpu_count()
+    return args
+
+
+def get_arguments(defaults: Dict[str, Any]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog=CLI_NAME,
                                 description='This tool helps generate JSON datasets.',
                                 add_help=True)
@@ -72,17 +93,16 @@ def get_arguments(defaults: dict) -> argparse.Namespace:
     p.add_argument('-mp', '--multiprocessing', action='store', type=int,
                    help='Set the number of processes to generate the data.',
                    default=defaults['multiprocessing'])
-    #  todo validate negative numbers
-    return p.parse_args()
+    return validate_arguments(p.parse_args())
 
 
-def parse_data_timestamp(gen_type):
+def parse_data_timestamp(gen_type: str) -> Callable[[None], float]:
     if gen_type:
         LOG.warning('timestamp does not accept generation type, it will be ignored')
     return time.time
 
 
-def parse_data_str(gen_type):
+def parse_data_str(gen_type: str) -> Callable:
     if not gen_type:
         return str
     elif gen_type == 'rand':
@@ -95,7 +115,7 @@ def parse_data_str(gen_type):
         return lambda: str(gen_type)
 
 
-def parse_data_int(gen_type):
+def parse_data_int(gen_type) -> Callable:
     if not gen_type:
         return lambda: None
     elif gen_type == 'rand':
@@ -112,7 +132,7 @@ def parse_data_int(gen_type):
         raise ValueError(f'invalid generation type for integers: {gen_type}')
 
 
-def parse_data_schema(raw_schema: str) -> dict:
+def parse_data_schema(raw_schema: str) -> Dict[str, Callable]:
     schema: dict = json.loads(raw_schema)
     parser = dict(timestamp=parse_data_timestamp, str=parse_data_str, int=parse_data_int)
     for k, v in schema.items():
@@ -127,7 +147,7 @@ def parse_data_schema(raw_schema: str) -> dict:
     return schema
 
 
-def get_schema(raw_schema):
+def get_schema(raw_schema: str) -> Dict[str, Callable]:
     try:
         schema = parse_data_schema(raw_schema)
     except ValueError as exc:
@@ -141,18 +161,18 @@ def get_schema(raw_schema):
     sys.exit(1)
 
 
-def write_data_line(schema: dict, fp: IO = sys.stdout):
+def write_data_line(schema: Dict[str, Callable], fp: IO = sys.stdout) -> None:
     line = {k: v() for k, v in schema.items()}
     fp.write(json.dumps(line) + '\n')
 
 
-def clear_path_with_files(name: str, path: str):
+def clear_path_with_files(name: str, path: str) -> None:
     for file in os.listdir(path):
         if file.endswith(name + '.jsonl'):
             os.remove(os.path.join(path, file))
 
 
-def gen_file_name(prefix: str, base_name: str, count):
+def gen_file_name(prefix: str, base_name: str, count: int) -> Generator[str, None, None]:
     if prefix == 'count':
         for i in range(count):
             yield f'{i + 1}_{base_name}.jsonl'
@@ -166,13 +186,31 @@ def gen_file_name(prefix: str, base_name: str, count):
             yield f'{uuid.uuid4()}_{base_name}.jsonl'
 
 
-def write_data_in_file(path, name, schema, lines):
+def write_data_in_file(path: str, name: str, schema: Dict[str, Callable], lines: int) -> None:
     with open(os.path.join(path, name), 'w') as f:
         for i in range(lines):
             write_data_line(schema, f)
 
 
-def write_data(schema: dict, args: argparse.Namespace):
+def write_data_mp_worker(task_queue: mp.JoinableQueue) -> None:
+    while True:
+        try:
+            data = task_queue.get_nowait()
+            write_data_in_file(*data)
+        except queue.Empty:
+            return
+
+
+def write_data_mp(tasks: mp.JoinableQueue, processes: int) -> None:
+    LOG.info(f'creating data in {processes} processes')
+    process_pool = [mp.Process(target=write_data_mp_worker, args=(tasks, ))
+                    for _ in range(processes)]
+    [p.start() for p in process_pool]
+    [p.join() for p in process_pool]
+    [p.close() for p in process_pool]
+
+
+def write_data(schema: Dict[str, Callable], args: argparse.Namespace) -> None:
     clear_path = args.clear_path
     count = args.count
     lines = args.data_lines
@@ -187,16 +225,27 @@ def write_data(schema: dict, args: argparse.Namespace):
         if clear_path:
             clear_path_with_files(name, path)
         name_gen = gen_file_name(prefix, name, count)
-        for name in name_gen:
-            write_data_in_file(path, name, schema, lines)
+        if processes == 1:
+            for name in name_gen:
+                write_data_in_file(path, name, schema, lines)
+        else:
+            tasks = mp.JoinableQueue()
+            for name in name_gen:
+                tasks.put((path, name, schema, lines))
+            write_data_mp(tasks, processes)
 
 
 if __name__ == '__main__':
-    setup_logger()
+    logging.basicConfig(level=logging.INFO, format='%(name)s: %(levelname)s: %(message)s')
     defaults = get_config()
     LOG.info('config found')
     args = get_arguments(defaults)
     LOG.info('arguments are correct')
     schema = get_schema(args.data_schema)
     LOG.info('data_schema parsed correctly')
+    LOG.info('building datasets...')
+    start = time.perf_counter()
     write_data(schema, args)
+    LOG.info('done!')
+    duration = time.perf_counter() - start
+    LOG.info(f'data was written within {duration:.2f} seconds')
