@@ -13,7 +13,7 @@ from typing import IO, Callable, Dict, Any, Generator, List
 from functools import partial
 
 CONFIG_NAME = 'default.ini'
-CLI_NAME = 'datagen'
+CLI_NAME = __file__
 LOG = logging.getLogger(CLI_NAME)
 
 
@@ -293,6 +293,7 @@ def main() -> None:
 
     duration = time.perf_counter() - start
     LOG.info(f'data was written within {duration:.2f} seconds')
+    logging.shutdown()
 
 
 if __name__ == '__main__':
